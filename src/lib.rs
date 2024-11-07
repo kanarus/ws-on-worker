@@ -2,7 +2,7 @@ mod room;
 use room::Room;
 
 use ohkami::prelude::*;
-use ohkami::format::HTML;
+use ohkami::format::{HTML, Query};
 use ohkami::typed::status;
 use ohkami::ws::{WebSocketContext, WebSocket, StreamExt};
 use worker::{WebsocketEvent, DurableObject, ResponseBody};
@@ -62,14 +62,26 @@ async fn create_chatroom(
     status::Created(id.to_string())
 }
 
+#[derive(Deserialize)]
+struct ChatroomSessionMeta<'req> {
+    username: Option<&'req str>,
+}
+
 async fn ws_chatroom((id,): (&str,),
+    Query(meta): Query<ChatroomSessionMeta<'_>>,
     _: WebSocketContext<'_>,
     Bindings { ROOMS }: Bindings
 ) -> WebSocket {
     let room = ROOMS
         .id_from_string(id).unwrap()
         .get_stub().unwrap();
-    room.fetch_with_str(&format!("http://rooms/{id}")).await.unwrap()
-        .websocket().unwrap()
-        .into()
+
+    let mut url = format!("http://rooms");
+    if let Some(username) = meta.username {
+        url.push_str("?username=");
+        url.push_str(username);
+    }
+
+    room.fetch_with_str(&url).await.unwrap()
+        .websocket().unwrap().into()
 }
