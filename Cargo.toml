@@ -1,0 +1,18 @@
+[package]
+name    = "ws-on-worker"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = "s"
+
+[dependencies]
+console_error_panic_hook = { version = "0.1.7" }
+worker = { version = "0.4" }
+ohkami = { path = "../../ohkami-rs/ohkami/ohkami", features = [
+    "rt_worker",
+    "ws"
+] }
