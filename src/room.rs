@@ -5,20 +5,12 @@ use ohkami::serde::{json, Deserialize, Serialize};
 #[durable_object]
 pub struct Room {
     state:    State,
-    env:      Env,
     sessions: Sessions
 }
 
 #[derive(Deserialize, Serialize)]
 enum Message {
     MemberJoined { name: String },
-}
-impl Message {
-    fn serialize(self) -> String {
-        match self {
-            Self::MemberJoined { name } => format!(""),
-        }
-    }
 }
 
 struct Sessions(js::Map);
@@ -63,7 +55,7 @@ struct Metadata {
 
 #[durable_object]
 impl DurableObject for Room {
-    fn new(state: State, env: Env) -> Self {
+    fn new(state: State, _: Env) -> Self {
         let mut sessions = Sessions::new();
 
         // restore sessions if woken up from hibernation
@@ -74,7 +66,7 @@ impl DurableObject for Room {
             });
         }
 
-        Self { state, env, sessions }
+        Self { state, sessions }
     }
 
     async fn fetch(&mut self, req: worker::Request) -> worker::Result<worker::Response> {
@@ -93,13 +85,19 @@ impl DurableObject for Room {
         ws:      WebSocket,
         message: worker::WebSocketIncomingMessage,
     ) -> worker::Result<()> {
-        let session = self.sessions.get(&ws).unwrap();
-
         let worker::WebSocketIncomingMessage::String(message) = message else {
             return Err(worker::Error::BadEncoding)
         };
 
-        
+        let session = self.sessions.get(&ws).unwrap();
+        if !session.message_queue.is_empty() {
+            for queued_message in session.message_queue {
+                ws.send(&queued_message).unwrap();
+            }
+        }
+        self.sessions.set(&ws, Session {  message_queue: vec![], ..session });
+
+
 
         Ok(())
     }
@@ -142,5 +140,9 @@ impl Room {
             }
             Session { meta, message_queue }
         });
+    }
+
+    fn broadcast(&mut self, message: Message) {
+        /
     }
 }
