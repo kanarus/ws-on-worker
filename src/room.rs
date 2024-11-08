@@ -141,6 +141,6 @@ impl Room {
     }
 
     fn broadcast(&mut self, message: Message) {
-        /
+        todo!()
     }
 }

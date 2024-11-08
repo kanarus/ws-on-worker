@@ -4,8 +4,7 @@ use room::Room;
 use ohkami::prelude::*;
 use ohkami::format::{HTML, Query};
 use ohkami::typed::status;
-use ohkami::ws::{WebSocketContext, WebSocket, StreamExt};
-use worker::{WebsocketEvent, DurableObject, ResponseBody};
+use ohkami::ws::{WebSocketContext, WebSocket, Message};
 
 #[ohkami::bindings]
 struct Bindings;
@@ -19,7 +18,7 @@ async fn main() -> Ohkami {
         "/hello".GET(|| async {"Hello, world!"}),
         "/".GET(index),
         "/ws".GET(ws_without_durable_object),
-        "/chat".GET(ws_chatroom)
+        // "/chat".GET(ws_chatroom)
     ))
 }
 
@@ -30,58 +29,43 @@ async fn index() -> HTML<&'static str> {
 async fn ws_without_durable_object(
     ctx: WebSocketContext<'_>
 ) -> WebSocket {
-    ctx.upgrade(|ws| async move {
-        ws.send_with_str("Hello!").unwrap();
-
-        let mut e = ws.events().unwrap();
-        while let Some(Ok(e)) = e.next().await {
-            match e {
-                WebsocketEvent::Close(e) => {
-                    worker::console_log!("requested close: `{e:?}`");
-                    ws.close(Some(1000), Some("close frame")).unwrap();
-                }
-                WebsocketEvent::Message(e) => {
-                    if let Some(text) = e.text() {
-                        worker::console_log!("got text: `{text:?}`");
-                        ws.send_with_str(&text).unwrap();
-                        if text == "close" {
-                            ws.close(Some(1000), Some("close text")).unwrap();
-                            break
-                        }
-                    }
-                }
-            }
+    ctx.upgrade(|mut conn| async move {
+        conn.send("Hello!").await.expect("failed to say hello");
+        while let Ok(Some(Message::Text(text))) = conn.recv().await {
+            if text == "close" {break}
+            conn.send(text).await.expect("failed to echo");
         }
     })
 }
 
-async fn create_chatroom(
-    Bindings { ROOMS }: Bindings
-) -> status::Created<String> {
-    let id = ROOMS.unique_id().unwrap();
-    status::Created(id.to_string())
-}
-
-#[derive(Deserialize)]
-struct ChatroomSessionMeta<'req> {
-    username: Option<&'req str>,
-}
-
-async fn ws_chatroom((id,): (&str,),
-    Query(meta): Query<ChatroomSessionMeta<'_>>,
-    _: WebSocketContext<'_>,
-    Bindings { ROOMS }: Bindings
-) -> WebSocket {
-    let room = ROOMS
-        .id_from_string(id).unwrap()
-        .get_stub().unwrap();
-
-    let mut url = format!("http://rooms");
-    if let Some(username) = meta.username {
-        url.push_str("?username=");
-        url.push_str(username);
-    }
-
-    room.fetch_with_str(&url).await.unwrap()
-        .websocket().unwrap().into()
-}
+// async fn create_chatroom(
+//     Bindings { ROOMS }: Bindings
+// ) -> status::Created<String> {
+//     let id = ROOMS.unique_id().unwrap();
+//     status::Created(id.to_string())
+// }
+// 
+// #[derive(Deserialize)]
+// struct ChatroomSessionMeta<'req> {
+//     username: Option<&'req str>,
+// }
+// 
+// async fn ws_chatroom((id,): (&str,),
+//     Query(meta): Query<ChatroomSessionMeta<'_>>,
+//     _: WebSocketContext<'_>,
+//     Bindings { ROOMS }: Bindings
+// ) -> WebSocket {
+//     let room = ROOMS
+//         .id_from_string(id).unwrap()
+//         .get_stub().unwrap();
+// 
+//     let mut url = format!("http://rooms");
+//     if let Some(username) = meta.username {
+//         url.push_str("?username=");
+//         url.push_str(username);
+//     }
+// 
+//     room.fetch_with_str(&url).await.unwrap()
+//         .websocket().unwrap().into()
+// }
+// 

@@ -480,9 +480,9 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
 name = "mews"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "412c5a679574cd17f11ca111e5ce6d5673dc4a6bea6f6961c80921c2050a04a2"
+checksum = "ac64df0d9e08a0dffa3e8be1d34b924c0135fb1c0964cce5c4b96f9501999021"
 dependencies = [
  "base64",
  "sha1",

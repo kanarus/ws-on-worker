@@ -15,16 +15,15 @@
         </div>
     </main>
 
-    <script>
-        let ws = null;
-
+    <script>        
         const input = document.getElementById("input");
         input.spellcheck = false;
         input.disabled   = true;
-
+        
         const button = document.getElementById("button");
         button.textContent = "connect";
-
+        
+        let ws = null;
         button.addEventListener("click", (e) => {
             switch (button.textContent) {
                 case "connect": return (() => {
