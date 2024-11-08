@@ -94,12 +94,10 @@ impl DurableObject for Room {
             for queued_message in session.message_queue {
                 ws.send(&queued_message).unwrap();
             }
+            self.sessions.set(&ws, Session {  message_queue: vec![], ..session });
         }
-        self.sessions.set(&ws, Session {  message_queue: vec![], ..session });
 
-
-
-        Ok(())
+        todo!()
     }
 }
 
