@@ -24,10 +24,10 @@ impl Session {
         })
     }
 
-    pub(super) fn restore_on(ws: &WebSocket) -> Option<Self> {
+    pub(super) fn restore(ws: &WebSocket) -> Option<Self> {
         ws.deserialize_attachment().ok().flatten().map(Self::Active)
     }
-    pub(super) fn memorize_on(&self, ws: &WebSocket) -> worker::Result<()> {
+    pub(super) fn memorize_to(&self, ws: &WebSocket) -> worker::Result<()> {
         match self {
             Self::Active(a)   => ws.serialize_attachment(a),
             Self::Prepaing(_) => Err(worker::Error::Infallible)

@@ -22,7 +22,7 @@ impl DurableObject for Room {
 
         // restore sessions if woken up from hibernation
         for ws in state.get_websockets() {
-            if let Some(session) = Session::restore_on(&ws) {
+            if let Some(session) = Session::restore(&ws) {
                 sessions.insert(ws, session);
             }
         }
@@ -71,20 +71,20 @@ impl DurableObject for Room {
                 }
 
                 session.activate_for(name.clone())?;
-                session.memorize_on(&ws)?;
+                session.memorize_to(&ws)?;
                 
-                self.broadcast(Message::MemberJoined {
+                self.broadcast(Message::MemberJoinedBroadcast {
                     joined: name
                 })?;
 
-                ws.send(&Message::Ready { ready: true })?;
+                ws.send(&Message::ReadyResponse { ready: true })?;
             }
             Session::Active(a) => {
                 let Message::Text { message } = message else {
-                    return Err(worker::Error::Infallible);
+                    return Err(worker::Error::Infallible)
                 };
 
-                let message = Message::BroadCast {
+                let message = Message::TextBroadcast {
                     timestamp,
                     message,
                     name: a.username().to_string(),
@@ -113,7 +113,7 @@ impl Room {
                 // queue other members' joining message
                 for (_, other_session) in self.sessions.iter() {
                     if let Session::Active(other_session) = other_session {
-                        session.enqueue_message(Message::MemberJoined {
+                        session.enqueue_message(Message::MemberJoinedBroadcast {
                             joined: other_session.username().to_string()
                         });
                     }
@@ -154,8 +154,8 @@ impl Room {
             self.sessions.remove(ws);
         }
         for (_, name) in quitters {
-            self.broadcast(Message::MemberQuitted {
-                quit: name.to_string()
+            self.broadcast(Message::MemberQuittedBroadcast {
+                quit: name
             })?;
         }
 

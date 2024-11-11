@@ -4,12 +4,12 @@ use ohkami::serde::{json, Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 pub(super) enum Message {
-    JoinRequest { name: String },
-    Ready { ready: bool },
-    MemberJoined  { joined: String },
-    MemberQuitted { quit: String },
+    TextBroadcast { name: String, message: String, timestamp: u64 },
     Text { message: String },
-    BroadCast { name: String, message: String, timestamp: u64 },
+    JoinRequest { name: String },
+    ReadyResponse { ready: bool },
+    MemberJoinedBroadcast  { joined: String },
+    MemberQuittedBroadcast { quit: String },
 }
 
 impl Message {
