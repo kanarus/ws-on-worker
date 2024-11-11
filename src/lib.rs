@@ -1,7 +1,12 @@
+/*
+    this is Rust version of https://github.com/cloudflare/workers-chat-demo/blob/master/src/chat.mjs
+    with some other demo
+*/
+
 mod room;
 
 use ohkami::prelude::*;
-use ohkami::format::{HTML, Query};
+use ohkami::format::HTML;
 use ohkami::typed::status;
 use ohkami::ws::{WebSocketContext, WebSocket, Message};
 
@@ -16,10 +21,13 @@ async fn main() -> Ohkami {
     Ohkami::new((
         "/".GET(index),
         "/ws".GET(ws_without_durable_object),
-        "/chat"
-            .GET(get_chatrooms)
-            .POST(create_chatroom),
-        "/chat/:id".GET(ws_chatroom)
+
+        "/room"
+            .GET(get_chatrooms),
+        "/api/room"
+            .POST(create_private_chatroom),
+        "/api/room/:roomname/websocket"
+            .GET(ws_chatroom),
     ))
 }
 
@@ -43,33 +51,20 @@ async fn get_chatrooms() -> HTML<&'static str> {
     HTML(include_str!("../pages/chat.html"))
 }
 
-async fn create_chatroom(
+async fn create_private_chatroom(
     Bindings { ROOMS }: Bindings
 ) -> status::Created<String> {
     let id = ROOMS.unique_id().unwrap();
     status::Created(id.to_string())
 }
 
-#[derive(Deserialize)]
-struct ChatroomSessionRequest<'req> {
-    username: Option<&'req str>,
-}
-
-async fn ws_chatroom((id,): (&str,),
-    Query(meta): Query<ChatroomSessionRequest<'_>>,
+async fn ws_chatroom((roomname,): (&str,),
     _: WebSocketContext<'_>,
     Bindings { ROOMS }: Bindings
 ) -> WebSocket {
     let room = ROOMS
-        .id_from_string(id).unwrap()
+        .id_from_name(roomname).unwrap()
         .get_stub().unwrap();
-
-    let mut url = format!("http://rooms");
-    if let Some(username) = meta.username {
-        url.push_str("?username=");
-        url.push_str(username);
-    }
-
-    room.fetch_with_str(&url).await.unwrap()
+    room.fetch_with_str(&format!("http://rooms?roomname={roomname}")).await.unwrap()
         .websocket().unwrap().into()
 }
