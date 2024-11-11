@@ -6,20 +6,20 @@ use ohkami::serde::{Serialize, Deserialize};
 #[derive(Clone)]
 pub(super) enum Session {
     Active(ActiveSession),
-    Prepaing(PrepaingSession),
+    Preparing(PreparingSession),
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ActiveSession {
     username: String,
 }
 #[derive(Clone)]
-pub(super) struct PrepaingSession {
+pub(super) struct PreparingSession {
     queue: Vec<Message>,
 }
 
 impl Session {
     pub(super) fn new() -> Self {
-        Self::Prepaing(PrepaingSession {
+        Self::Preparing(PreparingSession {
             queue: Vec::new()
         })
     }
@@ -29,15 +29,15 @@ impl Session {
     }
     pub(super) fn memorize_to(&self, ws: &WebSocket) -> worker::Result<()> {
         match self {
-            Self::Active(a)   => ws.serialize_attachment(a),
-            Self::Prepaing(_) => Err(worker::Error::Infallible)
+            Self::Active(a)    => ws.serialize_attachment(a),
+            Self::Preparing(_) => Err(worker::Error::Infallible)
         }
     }
 
     pub(super) fn activate_for(&mut self, username: String) -> worker::Result<()> {
         match self {
-            Self::Active(_)   => Err(worker::Error::Infallible),
-            Self::Prepaing(_) => Ok(*self = Self::Active(ActiveSession { username }))
+            Self::Active(_)    => Err(worker::Error::Infallible),
+            Self::Preparing(_) => Ok(*self = Self::Active(ActiveSession { username }))
         }
     }
 }
@@ -48,7 +48,7 @@ impl ActiveSession {
     }
 }
 
-impl PrepaingSession {
+impl PreparingSession {
     pub(super) fn queued_messages(&self) -> &[Message] {
         &self.queue
     }

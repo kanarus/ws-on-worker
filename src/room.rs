@@ -59,7 +59,7 @@ impl DurableObject for Room {
 
         let session = self.sessions.get_mut(&ws).expect("No session found for the WebSocket");
         match session {
-            Session::Prepaing(p) => {
+            Session::Preparing(p) => {
                 let Message::JoinRequest { name } = message else {
                     return Err(worker::Error::Infallible)
                 };
@@ -108,10 +108,10 @@ impl Room {
         let session = {
             let mut session = Session::new();
             {
-                let Session::Prepaing(session) = &mut session else {unreachable!()};
+                let Session::Preparing(session) = &mut session else {unreachable!()};
 
-                // queue other members' joining message
-                for (_, other_session) in self.sessions.iter() {
+                // enqueue other members' joining message
+                for other_session in self.sessions.iter() {
                     if let Session::Active(other_session) = other_session {
                         session.enqueue_message(Message::MemberJoinedBroadcast {
                             joined: other_session.username().to_string()
@@ -139,7 +139,7 @@ impl Room {
 
         for ws in self.sessions.websockets() {
             match self.sessions.get_mut(&ws).unwrap() {
-                Session::Prepaing(p) => {
+                Session::Preparing(p) => {
                     p.enqueue_message(message.clone());
                 }
                 Session::Active(a) => {

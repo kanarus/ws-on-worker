@@ -53,16 +53,7 @@ impl SessionMap {
             .into()
         )
     }
-    pub(super) fn iter(&self) -> impl Iterator<Item = (WebSocket, &Session)> {
-        self.websockets().map(|ws| {
-            let session = self.get(&ws).unwrap();
-            (ws, session)
-        })
+    pub(super) fn iter(&self) -> impl Iterator<Item = &Session> {
+        self.websockets().map(|ws| self.get(&ws).unwrap())
     }
-    // pub(super) fn iter_mut(&mut self) -> impl Iterator<Item = (WebSocket, &mut Session)> {
-    //     self.websockets().map(|ws| {
-    //         let session = self.get_mut(&ws).unwrap();
-    //         (ws, session)
-    //     })
-    // }
 }

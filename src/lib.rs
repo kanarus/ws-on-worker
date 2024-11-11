@@ -1,5 +1,5 @@
 /*
-    this is Rust version of https://github.com/cloudflare/workers-chat-demo/blob/master/src/chat.mjs
+    This is Rust version of https://github.com/cloudflare/workers-chat-demo/blob/master/src/chat.mjs
     with some other demo
 */
 
@@ -19,11 +19,11 @@ async fn main() -> Ohkami {
     console_error_panic_hook::set_once();
 
     Ohkami::new((
-        "/".GET(index),
+        "/".GET(index_page),
         "/ws".GET(ws_without_durable_object),
 
         "/room"
-            .GET(get_chatrooms),
+            .GET(chat_page),
         "/api/room"
             .POST(create_private_chatroom),
         "/api/room/:roomname/websocket"
@@ -31,10 +31,11 @@ async fn main() -> Ohkami {
     ))
 }
 
-async fn index() -> HTML<&'static str> {
+async fn index_page() -> HTML<&'static str> {
     HTML(include_str!("../pages/index.html"))
 }
 
+/// Demo to show the same WebSocket interface as native async runtimes
 async fn ws_without_durable_object(
     ctx: WebSocketContext<'_>
 ) -> WebSocket {
@@ -47,7 +48,7 @@ async fn ws_without_durable_object(
     })
 }
 
-async fn get_chatrooms() -> HTML<&'static str> {
+async fn chat_page() -> HTML<&'static str> {
     HTML(include_str!("../pages/chat.html"))
 }
 
@@ -58,6 +59,7 @@ async fn create_private_chatroom(
     status::Created(id.to_string())
 }
 
+/// Demo of WebSocket with DurableObjects
 async fn ws_chatroom((roomname,): (&str,),
     _: WebSocketContext<'_>,
     Bindings { ROOMS }: Bindings
