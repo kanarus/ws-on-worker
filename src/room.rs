@@ -46,16 +46,12 @@ impl DurableObject for Room {
         ws:      WebSocket,
         message: worker::WebSocketIncomingMessage,
     ) -> worker::Result<()> {
-        let timestamp = ohkami::util::unix_timestamp();
-
         let message = {
             let worker::WebSocketIncomingMessage::String(message) = message else {
                 return Err(worker::Error::BadEncoding)
             };
             Message::parse(message)?
         };
-
-        self.state.storage().put(&timestamp.to_string(), &message).await?;
 
         let session = self.sessions.get_mut(&ws).expect("No session found for the WebSocket");
         match session {
@@ -84,11 +80,15 @@ impl DurableObject for Room {
                     return Err(worker::Error::Infallible)
                 };
 
+                let timestamp = ohkami::util::unix_timestamp();
+
                 let message = Message::TextBroadcast {
                     timestamp,
                     message,
                     name: a.username().to_string(),
                 };
+
+                self.state.storage().put(&timestamp.to_string(), &message).await?;
 
                 self.broadcast(message)?;
             }
@@ -111,7 +111,7 @@ impl Room {
                 let Session::Preparing(session) = &mut session else {unreachable!()};
 
                 // enqueue other members' joining message
-                for other_session in self.sessions.iter() {
+                for (_, other_session) in self.sessions.iter() {
                     if let Session::Active(other_session) = other_session {
                         session.enqueue_message(Message::MemberJoinedBroadcast {
                             joined: other_session.username().to_string()
@@ -137,8 +137,8 @@ impl Room {
     fn broadcast(&mut self, message: Message) -> worker::Result<()> {
         let mut quitters = Vec::new();
 
-        for ws in self.sessions.websockets() {
-            match self.sessions.get_mut(&ws).unwrap() {
+        for (ws, session) in self.sessions.iter_mut() {
+            match session {
                 Session::Preparing(p) => {
                     p.enqueue_message(message.clone());
                 }
