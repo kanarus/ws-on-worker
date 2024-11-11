@@ -67,6 +67,12 @@ async fn ws_chatroom((roomname,): (&str,),
     let room = ROOMS
         .id_from_name(roomname).unwrap()
         .get_stub().unwrap();
-    room.fetch_with_str(&format!("http://rooms?roomname={roomname}")).await.unwrap()
+    let req = worker::Request::new_with_init(
+        &format!("http://rooms?roomname={roomname}"),
+        worker::RequestInit::new().with_headers(worker::Headers::from_iter([
+            ("Upgrade", "websocket")
+        ]))
+    ).unwrap();
+    room.fetch_with_request(req).await.unwrap()
         .websocket().unwrap().into()
 }

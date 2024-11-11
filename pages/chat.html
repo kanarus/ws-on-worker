@@ -1,4 +1,7 @@
-<!-- the following is just a copy of https://github.com/cloudflare/workers-chat-demo/blob/master/src/chat.html -->
+<!--
+  the following is almost a copy of https://github.com/cloudflare/workers-chat-demo/blob/master/src/chat.html
+  with some edit
+-->
 
 <!DOCTYPE html>
 <!--
@@ -369,33 +372,35 @@ function startChat() {
 let lastSeenTimestamp = 0;
 let wroteWelcomeMessages = false;
 
-function join() {
+function join(retryCount = 0) {
   // If we are running via wrangler dev, use ws:
   const wss = document.location.protocol === "http:" ? "ws://" : "wss://";
   let ws = new WebSocket(wss + hostname + "/api/room/" + roomname + "/websocket");
-  let rejoined = false;
   let startTime = Date.now();
 
-  let rejoin = async () => {
-    if (!rejoined) {
-      rejoined = true;
-      currentWebSocket = null;
-
-      // Clear the roster.
-      while (roster.firstChild) {
-        roster.removeChild(roster.firstChild);
-      }
-
-      // Don't try to reconnect too rapidly.
-      let timeSinceLastJoin = Date.now() - startTime;
-      if (timeSinceLastJoin < 10000) {
-        // Less than 10 seconds elapsed since last join. Pause a bit.
-        await new Promise(resolve => setTimeout(resolve, 10000 - timeSinceLastJoin));
-      }
-
-      // OK, reconnect now!
-      join();
+  let tryRejoin = async () => {
+    if (retryCount == 5) {
+        console.log("Can't reconnect. Finishing...");
+        ws.close();
+        return;
     }
+
+    currentWebSocket = null;
+
+    // Clear the roster.
+    while (roster.firstChild) {
+      roster.removeChild(roster.firstChild);
+    }
+
+    // Don't try to reconnect too rapidly.
+    let timeSinceLastJoin = Date.now() - startTime;
+    if (timeSinceLastJoin < 10000) {
+      // Less than 10 seconds elapsed since last join. Pause a bit.
+      await new Promise(resolve => setTimeout(resolve, 10000 - timeSinceLastJoin));
+    }
+
+    // OK, reconnect now!
+    join(retryCount + 1);
   }
 
   ws.addEventListener("open", event => {
@@ -427,7 +432,7 @@ function join() {
         wroteWelcomeMessages = true;
         addChatMessage(null,
             "* This is a demo app built with Cloudflare Workers Durable Objects. The source code " +
-            "can be found at: https://github.com/cloudflare/workers-chat-demo");
+            "can be found at: https://github.com/kanarus/ws-on-worker");
         addChatMessage(null,
             "* WARNING: Participants in this chat are random people on the internet. " +
             "Names are not authenticated; anyone can pretend to be anyone. The people " +
@@ -451,11 +456,11 @@ function join() {
 
   ws.addEventListener("close", event => {
     console.log("WebSocket closed, reconnecting:", event.code, event.reason);
-    rejoin();
+    tryRejoin();
   });
   ws.addEventListener("error", event => {
     console.log("WebSocket error, reconnecting:", event);
-    rejoin();
+    tryRejoin();
   });
 }
 

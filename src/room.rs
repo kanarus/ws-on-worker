@@ -23,7 +23,7 @@ impl DurableObject for Room {
         // restore sessions if woken up from hibernation
         for ws in state.get_websockets() {
             if let Some(session) = Session::restore(&ws) {
-                sessions.insert(ws, session);
+                sessions.insert(ws, session).unwrap();
             }
         }
 
@@ -48,17 +48,20 @@ impl DurableObject for Room {
     ) -> worker::Result<()> {
         let message = {
             let worker::WebSocketIncomingMessage::String(message) = message else {
-                return Err(worker::Error::BadEncoding)
+                return Err({ws.close::<&str>(None, None)?; worker::Error::BadEncoding})
             };
             Message::parse(message)?
         };
 
-        let session = self.sessions.get_mut(&ws).expect("No session found for the WebSocket");
-        match session {
+        match self.sessions.get(&ws).expect("No session found for the WebSocket") {
             Session::Preparing(p) => {
                 let Message::JoinRequest { name } = message else {
-                    return Err(worker::Error::Infallible)
+                    return Err({ws.close::<&str>(None, None)?; worker::Error::Infallible})
                 };
+                if self.sessions.iter_actives().any(|a| a.username() == name) {
+                    ws.send_with_str(&format!("{{\"error\":\"username `{name}` is already used\"}}"))?;
+                    return Err({ws.close::<&str>(None, None)?; worker::Error::Infallible})
+                }
 
                 if !p.queued_messages().is_empty() {
                     for queued_message in p.queued_messages() {
@@ -66,7 +69,8 @@ impl DurableObject for Room {
                     }
                 }
 
-                session.activate_for(name.clone())?;
+                let session = self.sessions.get_mut(&ws).unwrap();
+                session.activate_by(name.clone())?;
                 session.memorize_to(&ws)?;
                 
                 self.broadcast(Message::MemberJoinedBroadcast {
@@ -77,7 +81,7 @@ impl DurableObject for Room {
             }
             Session::Active(a) => {
                 let Message::Text { message } = message else {
-                    return Err(worker::Error::Infallible)
+                    return Err({ws.close::<&str>(None, None)?; worker::Error::Infallible})
                 };
 
                 let timestamp = ohkami::util::unix_timestamp();
@@ -129,7 +133,7 @@ impl Room {
             session
         };
 
-        self.sessions.insert(ws, session);
+        self.sessions.insert(ws, session)?;
 
         Ok(())
     }

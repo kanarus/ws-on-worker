@@ -27,7 +27,7 @@ impl Message {
             .reverse(true)
             .limit(n)
         ).await?.values() {
-            last_n.push(json::from_str(&m?.as_string().unwrap()).unwrap());
+            last_n.push(serde_wasm_bindgen::from_value(m?).unwrap());
         }
         Ok(last_n)
     }

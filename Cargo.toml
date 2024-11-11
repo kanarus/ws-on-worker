@@ -10,8 +10,9 @@ crate-type = ["cdylib", "rlib"]
 opt-level = "s"
 
 [dependencies]
-console_error_panic_hook = { version = "0.1.7" }
-worker = { version = "0.4" }
+console_error_panic_hook = "0.1.7"
+serde-wasm-bindgen = "0.6.5"
+worker = "0.4"
 ohkami = { path = "../../ohkami-rs/ohkami/ohkami", features = [
     "rt_worker",
     "ws"

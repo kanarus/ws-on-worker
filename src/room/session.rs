@@ -34,7 +34,7 @@ impl Session {
         }
     }
 
-    pub(super) fn activate_for(&mut self, username: String) -> worker::Result<()> {
+    pub(super) fn activate_by(&mut self, username: String) -> worker::Result<()> {
         match self {
             Self::Active(_)    => Err(worker::Error::Infallible),
             Self::Preparing(_) => Ok(*self = Self::Active(ActiveSession { username }))
