@@ -16,13 +16,15 @@ async fn main() -> Ohkami {
     Ohkami::new((
         "/".GET(index),
         "/ws".GET(ws_without_durable_object),
-        "/chat".POST(create_chatroom),
+        "/chat"
+            .GET(get_chatrooms)
+            .POST(create_chatroom),
         "/chat/:id".GET(ws_chatroom)
     ))
 }
 
 async fn index() -> HTML<&'static str> {
-    HTML(include_str!("../index.html"))
+    HTML(include_str!("../pages/index.html"))
 }
 
 async fn ws_without_durable_object(
@@ -35,6 +37,10 @@ async fn ws_without_durable_object(
             conn.send(text).await.expect("failed to echo");
         }
     })
+}
+
+async fn get_chatrooms() -> HTML<&'static str> {
+    HTML(include_str!("../pages/chat.html"))
 }
 
 async fn create_chatroom(
