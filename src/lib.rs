@@ -51,12 +51,12 @@ async fn create_chatroom(
 }
 
 #[derive(Deserialize)]
-struct ChatroomSessionMeta<'req> {
+struct ChatroomSessionRequest<'req> {
     username: Option<&'req str>,
 }
 
 async fn ws_chatroom((id,): (&str,),
-    Query(meta): Query<ChatroomSessionMeta<'_>>,
+    Query(meta): Query<ChatroomSessionRequest<'_>>,
     _: WebSocketContext<'_>,
     Bindings { ROOMS }: Bindings
 ) -> WebSocket {

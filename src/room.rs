@@ -54,7 +54,7 @@ impl Sessions {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Session {
     state:         SessionState,
     meta:          Metadata,
@@ -64,10 +64,10 @@ struct Session {
 struct Metadata {
     username: Option<String>,
 }
-#[derive(Serialize, Deserialize, PartialEq)]
+#[derive(Serialize, Deserialize, PartialEq, Clone)]
 enum SessionState {
     Active,
-    Hiberbating,
+    Preparation,
 }
 
 #[durable_object]
@@ -78,7 +78,7 @@ impl DurableObject for Room {
         // restore sessions if woken up from hibernation
         for ws in state.get_websockets() {
             sessions.set(&ws, Session {
-                state:         SessionState::Active,
+                state:         SessionState::Preparation,
                 meta:          ws.deserialize_attachment().unwrap().unwrap_or_default(),
                 message_queue: Vec::new()
             });
@@ -107,20 +107,32 @@ impl DurableObject for Room {
             return Err(worker::Error::BadEncoding)
         };
 
-        let session  = self.sessions.get(&ws).unwrap();
-        let username = session.meta.username.clone().unwrap_or_else(|| String::from("anonymous"));
-        if session.state == SessionState::Active {
-            for queued_message in session.message_queue {
-                ws.send(&queued_message)?;
-            }
-            self.sessions.set(&ws, Session {  message_queue: vec![], ..session });
+        let mut session = self.sessions.get(&ws).unwrap();
 
-            self.broadcast(Message::MemberJoined { name: username.clone() });
+        if session.state == SessionState::Preparation {
+            if !session.message_queue.is_empty() {
+                for queued_message in &session.message_queue {
+                    ws.send(queued_message)?;
+                }
+
+                session.message_queue.clear();
+                self.sessions.set(&ws, session.clone());
+            }
+
+            self.broadcast(Message::MemberJoined {
+                name: session.meta.username.clone().unwrap_or_else(|| String::from("anonymous"))
+            });
+
+            session.state = SessionState::Active;
         }
 
         let timestamp = ohkami::util::unix_timestamp();
-        let message = Message::Text { username, timestamp, content:message };
-        
+        let message = Message::Text {
+            timestamp,
+            username: session.meta.username.unwrap_or_else(|| String::from("anonymous")),
+            content:  message
+        };
+
         self.state.storage().put(&timestamp.to_string(), message.clone()).await?;
         self.broadcast(message);
 
@@ -136,7 +148,7 @@ impl Room {
     ) -> worker::Result<()> {
         self.state.accept_web_socket(&ws);
 
-        ws.send_with_str(format!("Hi, this is a chat room!"))?;
+        ws.send_with_str("Hi, this is a chat room!")?;
 
         let meta = Metadata { username };
         ws.serialize_attachment(meta.clone())?;
@@ -179,7 +191,7 @@ impl Room {
                         already_quitted.push((ws, session));
                     }
                 }
-                SessionState::Hiberbating => {
+                SessionState::Preparation => {
                     session.message_queue.push(message.clone());
                 }
             }
