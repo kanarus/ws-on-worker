@@ -3,58 +3,54 @@ use worker::WebSocket;
 use ohkami::serde::{Serialize, Deserialize};
 
 
-#[derive(Serialize, Deserialize, Clone)]
-pub(super) struct Session {
-    /// hiberbatable data of session
-    meta: Metadata,
-    /// messages that are queued while this session is preparing to be active
-    queue: Vec<Message>,
+#[derive(Clone)]
+pub(super) enum Session {
+    Active(ActiveSession),
+    Prepaing(PrepaingSession),
 }
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-struct Metadata {
-    pub(super) username: Option<String>,
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) struct ActiveSession {
+    username: String,
+}
+#[derive(Clone)]
+pub(super) struct PrepaingSession {
+    queue: Vec<Message>,
 }
 
 impl Session {
     pub(super) fn new() -> Self {
-        Self {
-            meta:  Metadata::default(),
+        Self::Prepaing(PrepaingSession {
             queue: Vec::new()
-        }
+        })
     }
 
-    /// create `Session` with metadata restored from the `WebSocket`
-    pub(super) fn restore_on(ws: &WebSocket) -> Self {
-        Self {
-            meta: ws.deserialize_attachment().ok().flatten().unwrap_or_default(),
-            ..Self::new()
-        }
+    pub(super) fn restore_on(ws: &WebSocket) -> Option<Self> {
+        ws.deserialize_attachment().ok().flatten().map(Self::Active)
     }
-    /// memorize coresponded metadata into the `WebSocket` to make it survive hibernation
     pub(super) fn memorize_on(&self, ws: &WebSocket) -> worker::Result<()> {
-        ws.serialize_attachment(&self.meta)
+        match self {
+            Self::Active(a)   => ws.serialize_attachment(a),
+            Self::Prepaing(_) => Err(worker::Error::Infallible)
+        }
     }
 
-    pub(super) fn is_preparing(&self) -> bool {
-        self.meta.username.is_none()
+    pub(super) fn activate_for(&mut self, username: String) -> worker::Result<()> {
+        match self {
+            Self::Active(_)   => Err(worker::Error::Infallible),
+            Self::Prepaing(_) => Ok(*self = Self::Active(ActiveSession { username }))
+        }
     }
-    pub(super) fn mark_as_prepared_for(&mut self, username: String) {
-        self.meta.username = Some(username)
-    }
+}
 
-    pub(super) fn username(&self) -> Option<&str> {
-        self.meta.username.as_deref()
+impl ActiveSession {
+    pub(super) fn username(&self) -> &str {
+        &self.username
     }
-    pub(super) fn username_or_anonymous(&self) -> &str {
-        self.meta.username.as_deref().unwrap_or("<anonymous>")
-    }
+}
 
+impl PrepaingSession {
     pub(super) fn queued_messages(&self) -> &[Message] {
         &self.queue
-    }
-    pub(super) fn take_queued_messages(&mut self) -> Vec<Message> {
-        core::mem::take(&mut self.queue)
     }
     pub(super) fn enqueue_message(&mut self, message: Message) {
         self.queue.push(message);

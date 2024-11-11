@@ -22,7 +22,9 @@ impl DurableObject for Room {
 
         // restore sessions if woken up from hibernation
         for ws in state.get_websockets() {
-            sessions.set(&ws, Session::restore_on(&ws));
+            if let Some(session) = Session::restore_on(&ws) {
+                sessions.insert(ws, session);
+            }
         }
 
         Self { state, sessions, name:None }
@@ -55,39 +57,41 @@ impl DurableObject for Room {
 
         self.state.storage().put(&timestamp.to_string(), &message).await?;
 
-        let mut session = self.sessions.get(&ws).unwrap();
-        if session.is_preparing() {
-            let Message::JoinRequest { name } = message else {
-                return Err(worker::Error::Infallible)
-            };
+        let session = self.sessions.get_mut(&ws).expect("No session found for the WebSocket");
+        match session {
+            Session::Prepaing(p) => {
+                let Message::JoinRequest { name } = message else {
+                    return Err(worker::Error::Infallible)
+                };
 
-            if !session.queued_messages().is_empty() {
-                for queued_message in session.take_queued_messages() {
-                    ws.send(&queued_message)?;
+                if !p.queued_messages().is_empty() {
+                    for queued_message in p.queued_messages() {
+                        ws.send(queued_message)?;
+                    }
                 }
-                // apply `take_queued_messages` for the actual (JS-side's) `session`
-                self.sessions.set(&ws, session.clone());
+
+                session.activate_for(name.clone())?;
+                session.memorize_on(&ws)?;
+                
+                self.broadcast(Message::MemberJoined {
+                    joined: name
+                })?;
+
+                ws.send(&Message::Ready { ready: true })?;
             }
+            Session::Active(a) => {
+                let Message::Text { message } = message else {
+                    return Err(worker::Error::Infallible);
+                };
 
-            self.broadcast(Message::MemberJoined {
-                joined: name.clone()
-            });
+                let message = Message::BroadCast {
+                    timestamp,
+                    message,
+                    name: a.username().to_string(),
+                };
 
-            session.mark_as_prepared_for(name);
-            ws.send(&Message::Ready { ready: true })?;
-
-        } else {
-            let Message::Text { message } = message else {
-                return Err(worker::Error::Infallible);
-            };
-
-            let message = Message::BroadCast {
-                timestamp,
-                message,
-                name: session.username().unwrap().to_string(),
-            };
-
-            self.broadcast(message);
+                self.broadcast(message)?;
+            }
         }
 
         Ok(())
@@ -101,15 +105,18 @@ impl Room {
     ) -> worker::Result<()> {
         self.state.accept_web_socket(&ws);
 
-        self.sessions.set(&ws, {
+        let session = {
             let mut session = Session::new();
             {
+                let Session::Prepaing(session) = &mut session else {unreachable!()};
+
                 // queue other members' joining message
-                for other_ws in self.sessions.sockets() {
-                    let other_session = self.sessions.get(&other_ws).unwrap();
-                    session.enqueue_message(Message::MemberJoined {
-                        joined: other_session.username_or_anonymous().to_string()
-                    });
+                for (_, other_session) in self.sessions.iter() {
+                    if let Session::Active(other_session) = other_session {
+                        session.enqueue_message(Message::MemberJoined {
+                            joined: other_session.username().to_string()
+                        });
+                    }
                 }
 
                 // load last messages up to 100
@@ -119,31 +126,39 @@ impl Room {
                     session.enqueue_message(message);
                 }
             }
-            session.memorize_on(&ws)?;
             session
-        });
+        };
+
+        self.sessions.insert(ws, session);
 
         Ok(())
     }
 
-    fn broadcast(&mut self, message: Message) {
-        let mut quitted_sessions = Vec::new();
+    fn broadcast(&mut self, message: Message) -> worker::Result<()> {
+        let mut quitters = Vec::new();
 
-        for (ws, mut session) in self.sessions.iter() {
-            if session.is_preparing() {
-                session.enqueue_message(message.clone());
-            } else {
-                if let Err(_) = ws.send(&message) {
-                    quitted_sessions.push((ws, session));
+        for ws in self.sessions.websockets() {
+            match self.sessions.get_mut(&ws).unwrap() {
+                Session::Prepaing(p) => {
+                    p.enqueue_message(message.clone());
+                }
+                Session::Active(a) => {
+                    if let Err(_) = ws.send(&message) {
+                        quitters.push((ws.clone(), a.username().to_string()));
+                    }
                 }
             }
         }
 
-        for (ws, quitter) in quitted_sessions {
-            self.sessions.remove(&ws);
-            self.broadcast(Message::MemberQuitted {
-                quit: quitter.username_or_anonymous().to_string()
-            });
+        for (ws, _) in &quitters {
+            self.sessions.remove(ws);
         }
+        for (_, name) in quitters {
+            self.broadcast(Message::MemberQuitted {
+                quit: name.to_string()
+            })?;
+        }
+
+        Ok(())
     }
 }
