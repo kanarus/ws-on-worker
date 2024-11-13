@@ -1,18 +1,17 @@
 mod message;
 mod session;
-mod session_map;
 
 use self::message::Message;
 use self::session::Session;
-use self::session_map::SessionMap;
 use worker::{durable_object, async_trait, wasm_bindgen, wasm_bindgen_futures};
 use worker::{WebSocket, WebSocketPair};
+use ohkami::ws::SessionMap;
 
 #[durable_object]
 pub struct Room {
     name:     Option<String>,
     state:    worker::State,
-    sessions: SessionMap,
+    sessions: SessionMap<Session>,
 }
 
 #[durable_object]
@@ -78,7 +77,10 @@ impl DurableObject for Room {
                 let Message::JoinRequest { name } = message else {
                     return ws.send(&Message::ErrorResponse { error: String::from("expected JoinRequest message") })
                 };
-                if self.sessions.iter_actives().any(|a| a.username() == name) {
+                if self.sessions.iter()
+                    .filter_map(|(_, s)| s.as_active())
+                    .any(|a| a.username() == name)
+                {
                     return ws.send(&Message::ErrorResponse { error: format!("username `{name}` is already used") })
                 }
 

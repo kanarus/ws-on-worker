@@ -54,25 +54,18 @@ async fn chat_page() -> HTML<&'static str> {
 
 async fn create_private_chatroom(
     Bindings { ROOMS }: Bindings
-) -> status::Created<String> {
-    let id = ROOMS.unique_id().unwrap();
-    status::Created(id.to_string())
+) -> Result<status::Created<String>, worker::Error> {
+    let id = ROOMS.unique_id()?;
+    Ok(status::Created(id.to_string()))
 }
 
 /// Demo of WebSocket with DurableObjects
 async fn ws_chatroom((roomname,): (&str,),
-    _: WebSocketContext<'_>,
+    ctx: WebSocketContext<'_>,
     Bindings { ROOMS }: Bindings
-) -> WebSocket {
+) -> Result<WebSocket, worker::Error> {
     let room = ROOMS
-        .id_from_name(roomname).unwrap()
-        .get_stub().unwrap();
-    let req = worker::Request::new_with_init(
-        &format!("http://rooms?roomname={roomname}"),
-        worker::RequestInit::new().with_headers(worker::Headers::from_iter([
-            ("Upgrade", "websocket")
-        ]))
-    ).unwrap();
-    room.fetch_with_request(req).await.unwrap()
-        .websocket().unwrap().into()
+        .id_from_name(roomname)?
+        .get_stub()?;
+    ctx.upgrade_durable(room).await
 }

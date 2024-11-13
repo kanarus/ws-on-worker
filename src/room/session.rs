@@ -40,6 +40,13 @@ impl Session {
             Self::Preparing(_) => Ok(*self = Self::Active(ActiveSession { username }))
         }
     }
+
+    pub(super) fn as_active(&self) -> Option<&ActiveSession> {
+        match self {
+            Self::Active(a)    => Some(a),
+            Self::Preparing(_) => None
+        }
+    }
 }
 
 impl ActiveSession {
