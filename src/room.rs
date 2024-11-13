@@ -49,16 +49,13 @@ impl DurableObject for Room {
         was_clean: bool,
     ) -> worker::Result<()> {
         worker::console_log!("websocket_close: code={code}, reason={reason}, was_clean={was_clean}");
-        ws.close(Some(code as u16), Some(reason))
-    }
-
-    async fn websocket_error(
-        &mut self,
-        ws: WebSocket,
-        error: worker::Error,
-    ) -> worker::Result<()> {
-        worker::console_error!("websocket_error: {error}");
-        ws.send(&Message::ErrorResponse { error: error.to_string() })
+        if let Some(Session::Active(quit)) = self.sessions.remove(&ws) {
+            self.broadcast(Message::MemberQuittedBroadcast {
+                quit: quit.username().to_string()
+            }).ok();
+        };
+        ws.close(Some(code as u16), Some(reason)).ok();
+        Ok(())
     }
 
     async fn websocket_message(
@@ -68,19 +65,21 @@ impl DurableObject for Room {
     ) -> worker::Result<()> {
         let message = {
             let worker::WebSocketIncomingMessage::String(message) = message else {
-                return Err({ws.close::<&str>(None, None)?; worker::Error::BadEncoding})
+                return ws.send(&Message::ErrorResponse { error: String::from("expected text frame") })
             };
-            Message::parse(message)?
+            let Ok(message) = Message::parse(message) else {
+                return ws.send(&Message::ErrorResponse { error: String::from("unexpected format of message") })
+            };
+            message
         };
 
         match self.sessions.get(&ws).expect("No session found for the WebSocket") {
             Session::Preparing(p) => {
                 let Message::JoinRequest { name } = message else {
-                    return Err({ws.close::<&str>(None, None)?; worker::Error::Infallible})
+                    return ws.send(&Message::ErrorResponse { error: String::from("expected JoinRequest message") })
                 };
                 if self.sessions.iter_actives().any(|a| a.username() == name) {
-                    ws.send_with_str(&format!("{{\"error\":\"username `{name}` is already used\"}}"))?;
-                    return Err({ws.close::<&str>(None, None)?; worker::Error::Infallible})
+                    return ws.send(&Message::ErrorResponse { error: format!("username `{name}` is already used") })
                 }
 
                 if !p.queued_messages().is_empty() {
@@ -101,7 +100,7 @@ impl DurableObject for Room {
             }
             Session::Active(a) => {
                 let Message::Text { message } = message else {
-                    return Err({ws.close::<&str>(None, None)?; worker::Error::Infallible})
+                    return ws.send(&Message::ErrorResponse { error: String::from("expected Text message") })
                 };
 
                 let timestamp = ohkami::util::unix_timestamp();

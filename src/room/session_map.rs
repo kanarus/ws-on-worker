@@ -17,13 +17,14 @@ impl SessionMap {
         } else {
             self.0.push((ws, session));
         }
-
         Ok(())
     }
-    pub(super) fn remove(&mut self, ws: &WebSocket) {
+    pub(super) fn remove(&mut self, ws: &WebSocket) -> Option<Session> {
         ws.close::<&str>(None, None).ok();
         if let Some(index) = self.index_of(ws) {
-            self.0.remove(index);
+            Some(self.0.remove(index).1)
+        } else {
+            None
         }
     }
     fn index_of(&self, ws: &WebSocket) -> Option<usize> {

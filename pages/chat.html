@@ -381,6 +381,7 @@ function join(retryCount = 0) {
   let tryRejoin = async () => {
     if (retryCount == 5) {
         console.log("Can't reconnect. Finishing...");
+        document.location.hash = "";
         ws.close();
         return;
     }
