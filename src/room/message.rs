@@ -10,6 +10,7 @@ pub(super) enum Message {
     ReadyResponse { ready: bool },
     MemberJoinedBroadcast  { joined: String },
     MemberQuittedBroadcast { quit: String },
+    ErrorResponse { error: String },
 }
 
 impl Message {

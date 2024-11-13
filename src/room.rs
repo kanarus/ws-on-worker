@@ -41,6 +41,26 @@ impl DurableObject for Room {
         worker::Response::from_websocket(client)
     }
 
+    async fn websocket_close(
+        &mut self,
+        ws: WebSocket,
+        code: usize,
+        reason: String,
+        was_clean: bool,
+    ) -> worker::Result<()> {
+        worker::console_log!("websocket_close: code={code}, reason={reason}, was_clean={was_clean}");
+        ws.close(Some(code as u16), Some(reason))
+    }
+
+    async fn websocket_error(
+        &mut self,
+        ws: WebSocket,
+        error: worker::Error,
+    ) -> worker::Result<()> {
+        worker::console_error!("websocket_error: {error}");
+        ws.send(&Message::ErrorResponse { error: error.to_string() })
+    }
+
     async fn websocket_message(
         &mut self,
         ws:      WebSocket,
