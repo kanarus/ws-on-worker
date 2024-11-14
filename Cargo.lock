@@ -534,7 +534,7 @@ dependencies = [
 
 [[package]]
 name = "ohkami_lib"
-version = "0.2.6"
+version = "0.21.0"
 dependencies = [
  "byte_reader",
  "futures-core",
@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "ohkami_macros"
-version = "0.8.0"
+version = "0.21.0"
 dependencies = [
  "proc-macro2",
  "quote",
