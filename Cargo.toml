@@ -9,11 +9,12 @@ crate-type = ["cdylib", "rlib"]
 [profile.release]
 opt-level = "s"
 
+[dependencies.ohkami]
+git      = "https://github.com/ohkami-rs/ohkami"
+branch   = "v0.22"
+features = ["rt_worker", "ws"]
+
 [dependencies]
-console_error_panic_hook = "0.1.7"
-serde-wasm-bindgen = "0.6.5"
-worker = "0.4"
-ohkami = { path = "../../ohkami-rs/ohkami/ohkami", features = [
-    "rt_worker",
-    "ws"
-] }
+console_error_panic_hook = "0.1"
+serde-wasm-bindgen       = "0.6"
+worker                   = "0.5"

@@ -3,18 +3,16 @@ mod session;
 
 use self::message::Message;
 use self::session::Session;
-use worker::{durable_object, async_trait, wasm_bindgen, wasm_bindgen_futures};
 use worker::{WebSocket, WebSocketPair};
-use ohkami::ws::SessionMap;
+use ohkami::{DurableObject, ws::SessionMap};
 
-#[durable_object]
+#[DurableObject]
 pub struct Room {
     name:     Option<String>,
     state:    worker::State,
     sessions: SessionMap<Session>,
 }
 
-#[durable_object]
 impl DurableObject for Room {
     fn new(state: worker::State, _: worker::Env) -> Self {
         let mut sessions = SessionMap::new();
